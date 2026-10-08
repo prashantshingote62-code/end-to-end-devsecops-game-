@@ -1,35 +1,59 @@
-data "aws_vpc" "vpc" {
-  filter {
-    name   = "tag:Name"
-    values = [var.vpc-name]
+# Create the VPC
+resource "aws_vpc" "main" {
+  cidr_block = "10.0.0.0/16"
+  enable_dns_hostnames = true
+  tags = {
+    Name = var.vpc-name
   }
 }
 
-data "aws_internet_gateway" "igw" {
-  filter {
-    name   = "tag:Name"
-    values = [var.igw-name]
+# Create the Internet Gateway
+resource "aws_internet_gateway" "igw" {
+  vpc_id = aws_vpc.main.id
+  tags = {
+    Name = var.igw-name
   }
 }
 
-data "aws_subnet" "subnet" {
-  filter {
-    name   = "tag:Name"
-    values = [var.subnet-name]
+# Create the primary public subnet (replaces original data lookup)
+resource "aws_subnet" "subnet" {
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = "10.0.1.0/24"
+  availability_zone       = "ap-south-1a"
+  map_public_ip_on_launch = true
+  tags = {
+    Name = var.subnet-name
   }
 }
 
-data "aws_security_group" "sg-default" {
-  filter {
-    name   = "tag:Name"
-    values = [var.security-group-name]
+# Create the Security Group
+resource "aws_security_group" "sg-default" {
+  vpc_id = aws_vpc.main.id
+  name   = var.security-group-name
+  description = "Default SG"
+
+  ingress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
   }
 }
+
+# --- Existing resource definitions ---
+# (Keeping your original Subnet2/RT/Association code below)
 
 resource "aws_subnet" "public-subnet2" {
-  vpc_id                  = data.aws_vpc.vpc.id
+  vpc_id                  = aws_vpc.main.id
   cidr_block              = "10.0.2.0/24"
-  availability_zone       = "us-east-1b"
+  availability_zone       = "ap-south-1b"
   map_public_ip_on_launch = true
 
   tags = {
@@ -38,10 +62,10 @@ resource "aws_subnet" "public-subnet2" {
 }
 
 resource "aws_route_table" "rt2" {
-  vpc_id = data.aws_vpc.vpc.id
+  vpc_id = aws_vpc.main.id
   route {
     cidr_block = "0.0.0.0/0"
-    gateway_id = data.aws_internet_gateway.igw.id
+    gateway_id = aws_internet_gateway.igw.id
   }
 
   tags = {
