@@ -1,7 +1,7 @@
 terraform {
   backend "s3" {
-    bucket       = "dev-aman-tf-bucket"
-    region       = "us-east-1"
+    bucket       = "dev-prashant-tf-bucket"
+    region       = "ap-south-1"
     key          = "End-to-End-Kubernetes-DevSecOps-Tetris-Project/EKS-TF/terraform.tfstate"
     use_lockfile = true
     encrypt      = true
