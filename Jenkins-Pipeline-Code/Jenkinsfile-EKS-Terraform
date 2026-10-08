@@ -1,72 +1,79 @@
-properties([
-    parameters([
-        string(defaultValue: 'variables.tfvars', description: 'Specify the file name', name: 'File-Name'),
-        choice(choices: ['plan', 'apply', 'destroy'], description: 'Select Terraform action', name: 'Terraform-Action')
-    ])
-])
-
 pipeline {
     agent any
+
+    parameters {
+        string(defaultValue: 'variables.tfvars', description: 'Specify the file name', name: 'File-Name')
+        choice(choices: ['plan', 'apply', 'destroy'], description: 'Select Terraform action', name: 'Terraform-Action')
+    }
+
+    environment {
+        // Ensure this ID matches your Jenkins Credentials ID
+        AWS_CREDS = 'aws-key'
+        REGION = 'ap-south-1'
+        TF_DIR = 'EKS-TF'
+    }
+
     stages {
-        stage('Checkout from Git') {
+        stage('Checkout') {
             steps {
-                git branch: 'master', url: 'https://github.com/AmanPathak-DevOps/End-to-End-Kubernetes-DevSecOps-Tetris-Project.git'
+                // Checkout the current workspace
+                checkout scm
             }
         }
-        stage('Initializing Terraform') {
+
+        stage('Terraform Init') {
             steps {
-                withAWS(credentials: 'aws-key', region: 'us-east-1') {
-                dir('EKS-TF') {
-                    script {
-                        sh 'terraform init'
+                withAWS(credentials: "${env.AWS_CREDS}", region: "${env.REGION}") {
+                    dir("${env.TF_DIR}") {
+                        sh 'terraform init -reconfigure'
                     }
                 }
-                }
             }
         }
-        stage('Validate Terraform Code') {
+
+        stage('Terraform Validate') {
             steps {
-                withAWS(credentials: 'aws-key', region: 'us-east-1') {
-                dir('EKS-TF') {
-                    script {
+                withAWS(credentials: "${env.AWS_CREDS}", region: "${env.REGION}") {
+                    dir("${env.TF_DIR}") {
                         sh 'terraform validate'
                     }
                 }
-                }
             }
         }
-        stage('Terraform Plan') {
+
+        stage('Terraform Execution') {
             steps {
-                withAWS(credentials: 'aws-key', region: 'us-east-1') {
-                dir('EKS-TF') {
-                    script {
-                        sh "terraform plan -var-file=${params.'File-Name'}"
-                    }
-                }
-                }
-            }
-        }
-        stage('Terraform Action') {
-            steps {
-                withAWS(credentials: 'aws-key', region: 'us-east-1') {
-                script {
-                    echo "${params.'Terraform-Action'}"
-                    dir('EKS-TF') {
+                withAWS(credentials: "${env.AWS_CREDS}", region: "${env.REGION}") {
+                    dir("${env.TF_DIR}") {
                         script {
-                            if (params.'Terraform-Action' == 'plan') {
-                                sh "terraform plan -var-file=${params.'File-Name'}"
-                            } else if (params.'Terraform-Action' == 'apply') {
-                                sh "terraform apply -auto-approve -var-file=${params.'File-Name'}"
-                            } else if (params.'Terraform-Action' == 'destroy') {
-                                sh "terraform destroy -auto-approve -var-file=${params.'File-Name'}"
-                            } else {
-                                error "Invalid value for Terraform-Action: ${params.'Terraform-Action'}"
+                            def action = params.'Terraform-Action'
+                            def varFile = params.'File-Name'
+
+                            echo "Executing Terraform action: ${action}"
+
+                            switch(action) {
+                                case 'plan':
+                                    sh "terraform plan -var-file=${varFile}"
+                                    break
+                                case 'apply':
+                                    sh "terraform apply -auto-approve -var-file=${varFile}"
+                                    break
+                                case 'destroy':
+                                    sh "terraform destroy -auto-approve -var-file=${varFile}"
+                                    break
+                                default:
+                                    error "Invalid action: ${action}"
                             }
                         }
                     }
                 }
-                }
             }
+        }
+    }
+
+    post {
+        always {
+            echo 'Pipeline finished.'
         }
     }
 }
